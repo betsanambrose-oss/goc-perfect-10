@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Perfect 10 | GameOn Chennai</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;cursor:none}
+  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+/* LED dot-matrix stopwatch, SS:cc (seconds : hundredths).
+   Tap 1 starts, tap 2 freezes, next tap carries on running, double tap resets to 00:00. */
+
+/* ============ Clock ============ */
+// BOUNCE_MS also merges one press that arrives twice (switch bounce, or a gamepad and a key event for the same press on Android)
+const BOUNCE_MS = 80, DOUBLE_MS = 400, MAX_MS = 99990;   // 99:99
+let running = false, acc = 0, startAt = 0, lastPress = -1e9;
+
+function elapsed(now){ return Math.min(MAX_MS, running ? acc + (now - startAt) : acc); }
+function press(t){
+  const since = t - lastPress;
+  if (since < BOUNCE_MS) return;   // switch contact bounce
+  lastPress = t;
+  if (since < DOUBLE_MS) { running = false; acc = 0; return; }   // double tap: reset
+  if (running) { acc = elapsed(t); running = false; }            // freeze at the press time
+  else { startAt = t; running = true; }
+}
+
+/* ============ LED digits ============ */
+// Each digit is a dense 14 x 25 LED grid. Segments are 3 LEDs thick with mitred ends, so they meet
+// like a real seven-segment LED board: every LED has a fixed place and only switches on or off.
+const DIG_W = 14, DIG_H = 25, GAP = 4, COLON_W = 3;
+const hSeg = (row) => { const d = []; for (let k = -1; k <= 1; k++) for (let c = 2 + Math.abs(k); c <= 11 - Math.abs(k); c++) d.push([c, row + k]); return d; };
+const vSeg = (col, top) => { const d = []; for (let k = -1; k <= 1; k++) for (let r = top + Math.abs(k); r <= top + 9 - Math.abs(k); r++) d.push([col + k, r]); return d; };
+const SEG = { a: hSeg(1), g: hSeg(12), d: hSeg(23), f: vSeg(1, 2), b: vSeg(12, 2), e: vSeg(1, 13), c: vSeg(12, 13) };
+const DIGITS = ['abcdef', 'bc', 'abdeg', 'abcdg', 'bcfg', 'acdfg', 'acdefg', 'abc', 'abcdefg', 'abcdfg'];
+const COLON = [];
+for (const r0 of [6, 16]) for (let c = 0; c < 3; c++) for (let r = r0; r < r0 + 3; r++) COLON.push([c, r]);
+const TOTAL_W = 4 * DIG_W + 2 * GAP + (GAP + COLON_W + GAP);   // 75 LEDs
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let pitch = 10, ox = 0, oy = 0, shown = '';
+
+function layout(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2),   // 2x is sharp enough and keeps cheap tablets fast
+        w = innerWidth, h = innerHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  pitch = Math.min(w * 0.96 / TOTAL_W, h * 0.92 / DIG_H);
+  ox = (w - TOTAL_W * pitch) / 2 + pitch / 2;
+  oy = (h - DIG_H * pitch) / 2 + pitch / 2;
+  shown = '';
+}
+function draw(txt){
+  const on = new Path2D(), off = new Path2D(), r = pitch * 0.38;
+  const add = (p, col, row) => { const x = ox + col * pitch, y = oy + row * pitch; p.moveTo(x + r, y); p.arc(x, y, r, 0, Math.PI * 2); };
+  let x = 0;
+  for (let i = 0; i < txt.length; i++) {
+    const ch = txt[i];
+    if (ch === ':') {
+      x += GAP;
+      COLON.forEach(([c, rw]) => add(on, x + c, rw));
+      x += COLON_W + GAP;
+      continue;
+    }
+    const lit = DIGITS[ch];
+    for (const k in SEG) SEG[k].forEach(([c, rw]) => add(lit.includes(k) ? on : off, x + c, rw));
+    x += DIG_W + (i === 0 || i === 3 ? GAP : 0);   // gap inside each pair of digits
+  }
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+  ctx.fillStyle = '#240404'; ctx.fill(off);
+  ctx.fillStyle = '#FF1A1A'; ctx.fill(on);
+}
+function text(ms){
+  const cs = Math.floor(ms / 10), p = n => String(n).padStart(2, '0');
+  return `${p(Math.floor(cs / 100))}:${p(cs % 100)}`;
+}
+
+/* ============ Input: USB button (gamepad or keyboard mode), screen tap ============ */
+const padPrev = {};
+function pollGamepads(){
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const p of pads) {
+    if (!p) continue;
+    const now = p.buttons.map(b => b.pressed || b.value > 0.5), prev = padPrev[p.index];
+    if (prev && now.some((v, i) => v && !prev[i])) {
+      // gamepad.timestamp is when the button changed, more exact than the frame time
+      press(p.timestamp && Math.abs(performance.now() - p.timestamp) < 200 ? p.timestamp : performance.now());
+    }
+    padPrev[p.index] = now;
+  }
+}
+window.addEventListener('keydown', e => { e.preventDefault(); if (!e.repeat) press(e.timeStamp || performance.now()); });
+window.addEventListener('pointerdown', e => { e.preventDefault(); press(e.timeStamp || performance.now()); });
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ============ Fullscreen, landscape, screen awake, offline ============ */
+async function keepAwake(){ try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+window.addEventListener('pointerdown', async () => {
+  keepAwake();
+  try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); } catch (e) {}
+  try { await screen.orientation.lock('landscape'); } catch (e) {}
+}, { once: true });
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ============ Loop ============ */
+window.addEventListener('resize', layout);
+layout();
+keepAwake();
+(function frame(){
+  requestAnimationFrame(frame);
+  pollGamepads();
+  const t = text(elapsed(performance.now()));
+  if (t !== shown) { draw(t); shown = t; }
+})();
+</script>
+</body>
+</html>
