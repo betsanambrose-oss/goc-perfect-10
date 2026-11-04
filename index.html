@@ -17,6 +17,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<button id="hit" aria-label="Button" autofocus style="position:fixed;inset:0;opacity:0;border:0;background:none"></button>
 <script>
 'use strict';
 /* LED dot-matrix stopwatch, SS:cc (seconds : hundredths).
@@ -101,18 +102,26 @@ function pollGamepads(){
     padPrev[p.index] = now;
   }
 }
-window.addEventListener('keydown', e => { e.preventDefault(); if (!e.repeat) press(e.timeStamp || performance.now()); });
-window.addEventListener('pointerdown', e => { e.preventDefault(); press(e.timeStamp || performance.now()); });
+// Android sends the encoder button as a "select" key: it can arrive as keydown, or only as a click on the
+// focused element (no pointer), so both count. BOUNCE_MS merges a keydown and its click into one press.
+const hit = document.getElementById('hit');
+const refocus = () => { if (document.activeElement !== hit) hit.focus({ preventScroll: true }); };
+window.addEventListener('keydown', e => { goFull(); if (!e.repeat) press(e.timeStamp || performance.now()); e.preventDefault(); });
+hit.addEventListener('click', e => { if (e.detail === 0) { goFull(); press(e.timeStamp || performance.now()); } });
+window.addEventListener('pointerdown', e => { e.preventDefault(); goFull(); refocus(); press(e.timeStamp || performance.now()); });
 window.addEventListener('contextmenu', e => e.preventDefault());
+setInterval(refocus, 1000);
 
 /* ============ Fullscreen, landscape, screen awake, offline ============ */
-async function keepAwake(){ try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {} }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
-window.addEventListener('pointerdown', async () => {
+// Every button press or tap is a user gesture, so keep asking until fullscreen and landscape stick
+async function goFull(){
   keepAwake();
-  try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); } catch (e) {}
+  try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (e) {}
   try { await screen.orientation.lock('landscape'); } catch (e) {}
-}, { once: true });
+}
+let wake = null;
+async function keepAwake(){ try { if ('wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } } catch (e) {} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ============ Loop ============ */

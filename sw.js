@@ -1,5 +1,5 @@
 // Perfect 10: offline cache. Bump VERSION whenever any file changes so tablets pick up the update.
-const VERSION = 'goc-p10-v6';
+const VERSION = 'goc-p10-v7';
 const FILES = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png'
