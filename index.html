@@ -17,7 +17,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<button id="hit" aria-label="Button" autofocus style="position:fixed;inset:0;opacity:0;border:0;background:none"></button>
+<textarea id="hit" inputmode="none" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Button" autofocus style="position:fixed;inset:0;opacity:0;border:0;resize:none;caret-color:transparent;background:none"></textarea>
 <script>
 'use strict';
 /* LED dot-matrix stopwatch, SS:cc (seconds : hundredths).
@@ -110,12 +110,14 @@ function pollGamepads(){
     padPrev[p.index] = now;
   }
 }
-// Android sends the encoder button as a "select" key: it can arrive as keydown, or only as a click on the
-// focused element (no pointer), so both count. BOUNCE_MS merges a keydown and its click into one press.
+// Android Chrome only delivers the encoder button (keyCode 151, empty key) while a text field has focus, so the
+// whole screen is an invisible text box; inputmode="none" keeps the on-screen keyboard away. A press may also
+// show up only as text input, so that counts too. BOUNCE_MS merges a keydown and its input into one press.
 const hit = document.getElementById('hit');
 const refocus = () => { if (document.activeElement !== hit) hit.focus({ preventScroll: true }); };
 window.addEventListener('keydown', e => { goFull(); if (!e.repeat) press(e.timeStamp || performance.now()); e.preventDefault(); });
-hit.addEventListener('click', e => { if (e.detail === 0) { goFull(); press(e.timeStamp || performance.now()); } });
+hit.addEventListener('beforeinput', e => { e.preventDefault(); goFull(); press(e.timeStamp || performance.now()); });
+hit.addEventListener('input', () => { hit.value = ''; });
 window.addEventListener('pointerdown', e => { e.preventDefault(); goFull(); refocus(); press(e.timeStamp || performance.now()); });
 window.addEventListener('contextmenu', e => e.preventDefault());
 setInterval(refocus, 1000);
@@ -137,9 +139,9 @@ if (/debug/.test(location.search)) {
   const box = document.createElement('pre');
   box.style.cssText = 'position:fixed;left:8px;top:8px;margin:0;z-index:9;color:#0f0;font:14px monospace;background:rgba(0,0,0,.7);padding:6px;pointer-events:none';
   document.body.appendChild(box);
-  const lines = ['build v10' + (ANDROID ? ' android' : '')];
+  const lines = ['build v11' + (ANDROID ? ' android' : '')];
   const log = m => { lines.push(m); if (lines.length > 12) lines.splice(1, 1); box.textContent = lines.join(String.fromCharCode(10)) + String.fromCharCode(10) + 'clock ' + (running ? 'RUN ' : 'STOP ') + text(elapsed(performance.now())); };
-  ['keydown', 'keyup', 'keypress', 'click', 'pointerdown'].forEach(t =>
+  ['keydown', 'keyup', 'keypress', 'beforeinput', 'input', 'pointerdown'].forEach(t =>
     window.addEventListener(t, e => { const m = `${t} key=${e.key} code=${e.code} kc=${e.keyCode} detail=${e.detail}`; setTimeout(() => log(m)); }, true));
   log('ready');
 }
