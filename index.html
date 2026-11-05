@@ -90,10 +90,13 @@ function text(ms){
 
 /* ============ Input: USB button (gamepad or keyboard mode), screen tap ============ */
 const padPrev = {};
-// Only touch the Gamepad API once a real gamepad shows up: on Android, reading it makes Chrome swallow the
-// encoder's key presses (keyCode 151), which are the only events that board sends there
+// On Android Chrome, using the Gamepad API makes it swallow the encoder's key presses (keyCode 151),
+// which are the only events that board sends there
+// Even a gamepadconnected listener switches Chrome's gamepad reader on, so on Android none is added at all.
+// Windows sees the encoder only as a joystick, so the PC keeps the Gamepad API.
+const ANDROID = /Android/i.test(navigator.userAgent);
 let padsOn = false;
-window.addEventListener('gamepadconnected', () => { padsOn = true; });
+if (!ANDROID) window.addEventListener('gamepadconnected', () => { padsOn = true; });
 function pollGamepads(){
   if (!padsOn) return;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -134,9 +137,9 @@ if (/debug/.test(location.search)) {
   const box = document.createElement('pre');
   box.style.cssText = 'position:fixed;left:8px;top:8px;margin:0;z-index:9;color:#0f0;font:14px monospace;background:rgba(0,0,0,.7);padding:6px;pointer-events:none';
   document.body.appendChild(box);
-  const lines = ['build v9'];
+  const lines = ['build v10' + (ANDROID ? ' android' : '')];
   const log = m => { lines.push(m); if (lines.length > 12) lines.splice(1, 1); box.textContent = lines.join(String.fromCharCode(10)) + String.fromCharCode(10) + 'clock ' + (running ? 'RUN ' : 'STOP ') + text(elapsed(performance.now())); };
-  ['keydown', 'keyup', 'keypress', 'click', 'pointerdown', 'gamepadconnected'].forEach(t =>
+  ['keydown', 'keyup', 'keypress', 'click', 'pointerdown'].forEach(t =>
     window.addEventListener(t, e => { const m = `${t} key=${e.key} code=${e.code} kc=${e.keyCode} detail=${e.detail}`; setTimeout(() => log(m)); }, true));
   log('ready');
 }
