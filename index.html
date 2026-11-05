@@ -116,8 +116,9 @@ function pollGamepads(){
 // show up only as text input, so that counts too. BOUNCE_MS merges a keydown and its input into one press.
 const hit = document.getElementById('hit');
 const refocus = () => { if (document.activeElement !== hit) hit.focus({ preventScroll: true }); };
-window.addEventListener('keydown', e => { goFull(); if (!e.repeat) press(e.timeStamp || performance.now()); e.preventDefault(); });
-hit.addEventListener('beforeinput', e => { e.preventDefault(); goFull(); press(e.timeStamp || performance.now()); });
+// The encoder's Android key events carry an unreliable timeStamp, so key presses are timed with performance.now()
+window.addEventListener('keydown', e => { goFull(); if (!e.repeat) press(performance.now()); e.preventDefault(); });
+hit.addEventListener('beforeinput', e => { e.preventDefault(); goFull(); press(performance.now()); });
 hit.addEventListener('input', () => { hit.value = ''; });
 window.addEventListener('pointerdown', e => { e.preventDefault(); goFull(); refocus(); press(e.timeStamp || performance.now()); });
 window.addEventListener('contextmenu', e => e.preventDefault());
@@ -140,10 +141,10 @@ if (/debug/.test(location.search)) {
   const box = document.createElement('pre');
   box.style.cssText = 'position:fixed;left:8px;top:8px;margin:0;z-index:9;color:#0f0;font:14px monospace;background:rgba(0,0,0,.7);padding:6px;pointer-events:none';
   document.body.appendChild(box);
-  const lines = ['build v12' + (USE_PADS ? ' pads' : ' keys'), navigator.userAgent.slice(0, 60)];
+  const lines = ['build v13' + (USE_PADS ? ' pads' : ' keys'), navigator.userAgent.slice(0, 60)];
   const log = m => { lines.push(m); if (lines.length > 12) lines.splice(1, 1); box.textContent = lines.join(String.fromCharCode(10)) + String.fromCharCode(10) + 'clock ' + (running ? 'RUN ' : 'STOP ') + text(elapsed(performance.now())); };
   ['keydown', 'keyup', 'keypress', 'beforeinput', 'input', 'pointerdown'].forEach(t =>
-    window.addEventListener(t, e => { const m = `${t} key=${e.key} code=${e.code} kc=${e.keyCode} detail=${e.detail}`; setTimeout(() => log(m)); }, true));
+    window.addEventListener(t, e => { const m = `${t} key=${e.key} kc=${e.keyCode} ts=${Math.round(e.timeStamp)} now=${Math.round(performance.now())}`; setTimeout(() => log(m)); }, true));
   log('ready');
 }
 
