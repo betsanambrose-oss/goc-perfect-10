@@ -90,7 +90,12 @@ function text(ms){
 
 /* ============ Input: USB button (gamepad or keyboard mode), screen tap ============ */
 const padPrev = {};
+// Only touch the Gamepad API once a real gamepad shows up: on Android, reading it makes Chrome swallow the
+// encoder's key presses (keyCode 151), which are the only events that board sends there
+let padsOn = false;
+window.addEventListener('gamepadconnected', () => { padsOn = true; });
 function pollGamepads(){
+  if (!padsOn) return;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for (const p of pads) {
     if (!p) continue;
