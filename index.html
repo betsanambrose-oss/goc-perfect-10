@@ -129,6 +129,18 @@ async function keepAwake(){ try { if ('wakeLock' in navigator && !wake) { wake =
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
+/* ============ Debug: open with ?debug to see what the tablet actually receives ============ */
+if (/debug/.test(location.search)) {
+  const box = document.createElement('pre');
+  box.style.cssText = 'position:fixed;left:8px;top:8px;margin:0;z-index:9;color:#0f0;font:14px monospace;background:rgba(0,0,0,.7);padding:6px;pointer-events:none';
+  document.body.appendChild(box);
+  const lines = ['build v9'];
+  const log = m => { lines.push(m); if (lines.length > 12) lines.splice(1, 1); box.textContent = lines.join(String.fromCharCode(10)) + String.fromCharCode(10) + 'clock ' + (running ? 'RUN ' : 'STOP ') + text(elapsed(performance.now())); };
+  ['keydown', 'keyup', 'keypress', 'click', 'pointerdown', 'gamepadconnected'].forEach(t =>
+    window.addEventListener(t, e => { const m = `${t} key=${e.key} code=${e.code} kc=${e.keyCode} detail=${e.detail}`; setTimeout(() => log(m)); }, true));
+  log('ready');
+}
+
 /* ============ Loop ============ */
 window.addEventListener('resize', layout);
 layout();
